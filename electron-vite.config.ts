@@ -7,15 +7,25 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin()],
     build: {
       lib: {
-        entry: resolve(__dirname, 'src/main/main.ts')
+        entry: resolve(__dirname, 'src/main/main.ts'),
+        formats: ['cjs']
+      },
+      rollupOptions: {
+        output: {
+          entryFileNames: '[name].js'
+        }
       }
     }
   },
   preload: {
     plugins: [externalizeDepsPlugin()],
     build: {
-      lib: {
-        entry: resolve(__dirname, 'src/preload/preload.ts')
+      rollupOptions: {
+        output: {
+          format: 'cjs',
+          entryFileNames: '[name].js',
+          exports: 'auto'
+        }
       }
     }
   },
