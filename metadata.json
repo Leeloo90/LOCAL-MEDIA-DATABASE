@@ -1,0 +1,8 @@
+{
+  "name": "Story Graph: Local Bridge",
+  "description": "A professional-grade media ingest and transcript indexing engine for non-linear video editing, featuring SQLite data modeling, speaker-bound transcript segmentation, and metadata extraction.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
