@@ -4,6 +4,10 @@ import { app } from 'electron';
 
 let db: Database.Database | null = null;
 
+/**
+ * UPDATED SCHEMA (v1.4)
+ * - Includes end_tc, resolution, codec, and size for professional media tracking.
+ */
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS projects (
     project_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -17,9 +21,13 @@ const SCHEMA = `
     file_name TEXT NOT NULL,
     file_path TEXT NOT NULL UNIQUE,
     start_tc TEXT NOT NULL,
+    end_tc TEXT NOT NULL,
     duration_frames INTEGER NOT NULL,
     fps REAL NOT NULL,
     type TEXT CHECK(type IN ('BROLL', 'DIALOGUE')) NOT NULL DEFAULT 'BROLL',
+    resolution TEXT,
+    codec TEXT,
+    size INTEGER,
     metadata TEXT,
     FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
   );
@@ -49,6 +57,29 @@ export function initDatabase(): Database.Database {
   db.pragma('journal_mode = WAL');
   db.exec(SCHEMA);
 
+  // --- AUTO-MIGRATION LOGIC ---
+  // This ensures your existing DB file gets the new columns without crashing
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(media_assets)").all() as any[];
+    const columns = tableInfo.map(col => col.name);
+    
+    const requiredColumns = [
+      { name: 'end_tc', type: 'TEXT DEFAULT "00:00:00:00" NOT NULL' },
+      { name: 'resolution', type: 'TEXT' },
+      { name: 'codec', type: 'TEXT' },
+      { name: 'size', type: 'INTEGER' }
+    ];
+
+    for (const col of requiredColumns) {
+      if (!columns.includes(col.name)) {
+        db.exec(`ALTER TABLE media_assets ADD COLUMN ${col.name} ${col.type};`);
+        console.log(`--- DB MIGRATION: Added ${col.name} column ---`);
+      }
+    }
+  } catch (e) {
+    console.error('Migration check failed:', e);
+  }
+
   // Create default project if none exists
   const projectCount = db.prepare('SELECT COUNT(*) as count FROM projects').get() as { count: number };
   if (projectCount.count === 0) {
@@ -77,115 +108,63 @@ export function closeDatabase() {
 
 // Database operations
 export const dbOperations = {
-  // Projects
   getProjects() {
-    const db = getDatabase();
-    return db.prepare('SELECT * FROM projects').all();
+    return getDatabase().prepare('SELECT * FROM projects').all();
   },
 
-  // Media Assets
   getAssets(projectId: number) {
-    const db = getDatabase();
-    return db.prepare('SELECT * FROM media_assets WHERE project_id = ?').all(projectId);
+    return getDatabase().prepare('SELECT * FROM media_assets WHERE project_id = ?').all(projectId);
   },
 
-  insertAsset(asset: {
-    project_id: number;
-    file_name: string;
-    file_path: string;
-    start_tc: string;
-    duration_frames: number;
-    fps: number;
-    type: string;
-    metadata: string;
-  }) {
-    const db = getDatabase();
-    const stmt = db.prepare(`
-      INSERT INTO media_assets (project_id, file_name, file_path, start_tc, duration_frames, fps, type, metadata)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    const result = stmt.run(
-      asset.project_id,
-      asset.file_name,
-      asset.file_path,
-      asset.start_tc,
-      asset.duration_frames,
-      asset.fps,
-      asset.type,
-      asset.metadata
-    );
-    return result.lastInsertRowid;
-  },
-
-  updateAssetType(assetId: number, type: string) {
-    const db = getDatabase();
-    db.prepare('UPDATE media_assets SET type = ? WHERE asset_id = ?').run(type, assetId);
-  },
-
-  deleteAsset(assetId: number) {
-    const db = getDatabase();
-    db.prepare('DELETE FROM media_assets WHERE asset_id = ?').run(assetId);
-  },
-
-  // Transcript Segments
-  getSegments(assetId: number) {
-    const db = getDatabase();
-    return db.prepare('SELECT * FROM transcript_segments WHERE asset_id = ?').all(assetId);
-  },
-
-  insertSegment(segment: {
-    asset_id: number;
-    speaker: string;
-    time_in: string;
-    time_out: string;
-    content: string;
-    word_data: string;
-  }) {
-    const db = getDatabase();
-    const stmt = db.prepare(`
-      INSERT INTO transcript_segments (asset_id, speaker, time_in, time_out, content, word_data)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
-    const result = stmt.run(
-      segment.asset_id,
-      segment.speaker,
-      segment.time_in,
-      segment.time_out,
-      segment.content,
-      segment.word_data
-    );
-    return result.lastInsertRowid;
-  },
-
-  deleteSegmentsByAsset(assetId: number) {
-    const db = getDatabase();
-    db.prepare('DELETE FROM transcript_segments WHERE asset_id = ?').run(assetId);
-  },
-
-  // Bulk operations
   insertAssets(assets: any[]) {
     const db = getDatabase();
     const insert = db.prepare(`
-      INSERT INTO media_assets (project_id, file_name, file_path, start_tc, duration_frames, fps, type, metadata)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO media_assets (
+        project_id, file_name, file_path, start_tc, end_tc, 
+        duration_frames, fps, type, resolution, size, metadata
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(file_path) DO UPDATE SET
+        start_tc = excluded.start_tc,
+        end_tc = excluded.end_tc,
+        duration_frames = excluded.duration_frames,
+        fps = excluded.fps,
+        resolution = excluded.resolution,
+        size = excluded.size,
+        metadata = excluded.metadata
     `);
 
     const insertMany = db.transaction((assetList: any[]) => {
       for (const asset of assetList) {
         insert.run(
-          asset.project_id,
+          asset.project_id || 1,
           asset.file_name,
           asset.file_path,
           asset.start_tc,
+          asset.end_tc,
           asset.duration_frames,
           asset.fps,
-          asset.type,
-          asset.metadata
+          asset.type || 'BROLL',
+          asset.resolution || 'N/A',
+          asset.size || 0,
+          asset.metadata || '{}'
         );
       }
     });
 
     insertMany(assets);
+  },
+
+  updateAssetType(assetId: number, type: string) {
+    getDatabase().prepare('UPDATE media_assets SET type = ? WHERE asset_id = ?').run(type, assetId);
+  },
+
+  deleteAsset(assetId: number) {
+    getDatabase().prepare('DELETE FROM media_assets WHERE asset_id = ?').run(assetId);
+  },
+
+  getSegments(assetId: number) {
+    return getDatabase().prepare('SELECT * FROM transcript_segments WHERE asset_id = ?').all(assetId);
   },
 
   insertSegments(segments: any[]) {
@@ -207,12 +186,17 @@ export const dbOperations = {
         );
       }
     });
-
     insertMany(segments);
   },
 
   findAssetByFileName(fileName: string) {
+    return getDatabase().prepare('SELECT * FROM media_assets WHERE file_name LIKE ?').get(`${fileName}%`);
+  },
+
+  clearAllData() {
     const db = getDatabase();
-    return db.prepare('SELECT * FROM media_assets WHERE file_name LIKE ?').get(`${fileName}%`);
+    db.prepare('DELETE FROM transcript_segments').run();
+    db.prepare('DELETE FROM media_assets').run();
+    console.log('--- STORY GRAPH: Database Cleared ---');
   }
 };

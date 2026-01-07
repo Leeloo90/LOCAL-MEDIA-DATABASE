@@ -1,4 +1,3 @@
-
 import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -9,210 +8,192 @@ import { initDatabase, closeDatabase, dbOperations } from './database';
 
 const execAsync = promisify(exec);
 
-const isDev = process.env.NODE_ENV === 'development';
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// Standard environment checks
+const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 let mainWindow: BrowserWindow | null = null;
 
-function createWindow() {
-  const preloadPath = path.join(__dirname, '../preload/preload.js');
-  console.log('Preload path:', preloadPath);
-  console.log('Preload exists:', fs.existsSync(preloadPath));
+/**
+ * DEFENSIVE PRELOAD RESOLUTION
+ */
+function resolvePreloadPath(): string {
+  const preloadDir = path.resolve(__dirname, '..', 'preload');
+  const possibleNames = ['index.js', 'index.mjs', 'preload.js', 'preload.mjs', 'preload.cjs'];
+  let resolvedPath = '';
+  if (fs.existsSync(preloadDir)) {
+    const filesInDir = fs.readdirSync(preloadDir);
+    for (const name of possibleNames) {
+      if (filesInDir.includes(name)) {
+        resolvedPath = path.join(preloadDir, name);
+        break;
+      }
+    }
+  }
+  console.log('--- STORY GRAPH: PRELOAD DIAGNOSTICS ---');
+  console.log('Resolved Preload:', resolvedPath || 'FAILED TO LOCATE');
+  console.log('----------------------------------------');
+  return resolvedPath;
+}
 
+function createWindow() {
+  const actualPreloadPath = resolvePreloadPath();
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
+    show: false,
     titleBarStyle: 'hiddenInset',
     backgroundColor: '#0c0c0c',
     webPreferences: {
-      preload: preloadPath,
+      preload: actualPreloadPath,
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: false 
     },
   });
 
-  // In development, load from Vite dev server; in production, load built files
-  if (isDev) {
-    mainWindow.loadURL('http://localhost:5173');
+  if (isDev && process.env['VITE_DEV_SERVER_URL']) {
+    mainWindow.loadURL(process.env['VITE_DEV_SERVER_URL']);
     mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
+    mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   }
+  mainWindow.once('ready-to-show', () => mainWindow?.show());
 }
 
 /**
- * RECURSIVE CRAWLER
+ * TIMECODE & METADATA UTILITIES
  */
-async function recursiveScan(dir: string, extensions: string[]): Promise<string[]> {
-  let results: string[] = [];
-  try {
-    const list = await fs.promises.readdir(dir);
-    for (const file of list) {
-      const filePath = path.resolve(dir, file);
-      const stat = await fs.promises.stat(filePath);
-      if (stat && stat.isDirectory()) {
-        results = results.concat(await recursiveScan(filePath, extensions));
-      } else {
-        if (extensions.includes(path.extname(filePath).toLowerCase())) {
-          results.push(filePath);
-        }
-      }
-    }
-  } catch (e) {
-    console.error(`Error scanning directory ${dir}:`, e);
-  }
-  return results;
+const tcToTotalFrames = (tc: string, fps: number): number => {
+  if (!tc || !tc.includes(':')) return 0;
+  const parts = tc.split(/[:;]/).map(Number);
+  if (parts.length !== 4) return 0;
+  const [h, m, s, f] = parts;
+  return Math.round(((h * 3600) + (m * 60) + s) * fps) + f;
 }
 
-/**
- * FFPROBE METADATA EXTRACTION
- */
+const framesToTcString = (totalFrames: number, fps: number): string => {
+  const h = Math.floor(totalFrames / (3600 * fps));
+  const m = Math.floor((totalFrames % (3600 * fps)) / (60 * fps));
+  const s = Math.floor((totalFrames % (60 * fps)) / fps);
+  const f = Math.round(totalFrames % fps);
+  return [h, m, s, f].map(v => String(v).padStart(2, '0')).join(':');
+}
+
 async function getMetadata(filePath: string): Promise<any> {
   try {
-    const command = `ffprobe -v error -show_format -show_streams -of json "${filePath}"`;
+    const sanitizedPath = filePath.replace(/"/g, '\\"');
+    const command = `ffprobe -v error -find_stream_info -show_format -show_streams -of json "${sanitizedPath}"`;
     const { stdout } = await execAsync(command);
     const data = JSON.parse(stdout);
-
-    // Extract relevant metadata
     const videoStream = data.streams?.find((s: any) => s.codec_type === 'video');
-    const audioStream = data.streams?.find((s: any) => s.codec_type === 'audio');
     const format = data.format;
 
-    // Calculate FPS from frame rate string (e.g., "24000/1001" -> 23.976)
-    let fps = null;
+    let fps = 25.0;
     if (videoStream?.r_frame_rate) {
       const [num, den] = videoStream.r_frame_rate.split('/').map(Number);
-      fps = den ? num / den : num;
+      fps = den > 0 ? num / den : num;
+    }
+
+    let start_tc = '00:00:00:00';
+    if (format.tags?.timecode) {
+      start_tc = format.tags.timecode;
+    } else {
+      for (const stream of data.streams) {
+        if (stream.tags?.timecode) {
+          start_tc = stream.tags.timecode;
+          break;
+        }
+      }
     }
 
     return {
       duration: parseFloat(format.duration) || 0,
-      fps,
-      resolution: videoStream ? `${videoStream.width}x${videoStream.height}` : null,
-      codec: videoStream?.codec_name || audioStream?.codec_name || 'unknown',
-      bitrate: format.bit_rate ? parseInt(format.bit_rate) : null,
-      size: format.size ? parseInt(format.size) : null,
+      fps: parseFloat(fps.toFixed(3)),
+      start_tc,
+      resolution: videoStream ? `${videoStream.width}x${videoStream.height}` : 'N/A',
+      codec: videoStream?.codec_name || 'unknown',
+      size: format.size ? parseInt(format.size) : 0,
     };
   } catch (error) {
-    console.error('ffprobe error:', error);
     return null;
   }
 }
 
 /**
- * IPC HANDLERS - SYSTEM & MEDIA
+ * IPC HANDLER REGISTRATION
+ * These MUST be registered for the bridge to work.
  */
-ipcMain.handle('dialog:openDirectory', async () => {
-  const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow!, {
-    properties: ['openDirectory', 'createDirectory']
+function registerIpcHandlers() {
+  // SYSTEM HANDLERS
+  ipcMain.handle('dialog:openFiles', async () => {
+    if (!mainWindow) return [];
+    const { filePaths } = await dialog.showOpenDialog(mainWindow, {
+      title: 'Import Media',
+      properties: ['openFile', 'multiSelections'],
+      filters: [{ name: 'Media Files', extensions: ['mp4', 'mov', 'wav', 'mp3', 'mkv', 'avi'] }]
+    });
+    return filePaths || [];
   });
-  if (canceled) return null;
-  return filePaths[0];
-});
 
-ipcMain.handle('get-metadata', async (_, filePath: string) => {
-  return await getMetadata(filePath);
-});
-
-ipcMain.handle('media:scan', async (_, rootDir: string) => {
-  const extensions = ['.mp4', '.mov', '.wav', '.mp3'];
-  const files = await recursiveScan(rootDir, extensions);
-
-  // Extract real metadata using ffprobe
-  const results = await Promise.all(
+ // src/main/main.ts - Updated Handler Only
+ipcMain.handle('media:scan', async (_, files: string[]) => {
+  return await Promise.all(
     files.map(async (file) => {
-      const metadata = await getMetadata(file);
-      const fps = metadata?.fps || 23.976;
-      const duration = metadata?.duration || 0;
-      const durationFrames = Math.floor(duration * fps);
-
+      const meta = await getMetadata(file);
+      const fps = meta?.fps || 23.976;
+      const durationFrames = Math.round((meta?.duration || 0) * fps);
+      const startFrames = tcToTotalFrames(meta?.start_tc, fps);
+      
       return {
+        project_id: 1,
         file_name: path.basename(file),
         file_path: file,
-        start_tc: '00:00:00:00',
+        start_tc: meta?.start_tc || '00:00:00:00',
+        end_tc: framesToTcString(startFrames + durationFrames, fps),
         fps,
         duration_frames: durationFrames,
-        metadata: {
-          resolution: metadata?.resolution || 'N/A',
-          codec: metadata?.codec || 'Unknown',
-          bitrate: metadata?.bitrate,
-          size: metadata?.size,
-        }
+        type: 'BROLL',
+        // Flattened properties for the database columns
+        resolution: meta?.resolution || 'N/A', 
+        size: meta?.size || 0,
+        metadata: JSON.stringify({
+          original_duration: meta?.duration,
+          codec: meta?.codec // Stored in JSON but hidden from table
+        })
       };
     })
   );
-
-  return results;
 });
 
-/**
- * IPC HANDLERS - DATABASE OPERATIONS (SQLite)
- */
-// Projects
-ipcMain.handle('db:getProjects', async () => {
-  return dbOperations.getProjects();
-});
+  // DATABASE HANDLERS
+  ipcMain.handle('db:getProjects', () => dbOperations.getProjects());
+  ipcMain.handle('db:getAssets', (_, pid) => dbOperations.getAssets(pid));
+  ipcMain.handle('db:insertAssets', (_, assets) => {
+    dbOperations.insertAssets(assets);
+    return true;
+  });
+  ipcMain.handle('db:clear', () => {
+    dbOperations.clearAllData();
+    return true;
+  });
+  
+  // New handlers for future transcript work
+  ipcMain.handle('db:getSegments', (_, aid) => dbOperations.getSegments(aid));
+  ipcMain.handle('db:updateAssetType', (_, aid, type) => {
+    dbOperations.updateAssetType(aid, type);
+    return true;
+  });
+}
 
-// Media Assets
-ipcMain.handle('db:getAssets', async (_, projectId: number) => {
-  return dbOperations.getAssets(projectId);
-});
-
-ipcMain.handle('db:insertAsset', async (_, asset: any) => {
-  return dbOperations.insertAsset(asset);
-});
-
-ipcMain.handle('db:insertAssets', async (_, assets: any[]) => {
-  dbOperations.insertAssets(assets);
-  return true;
-});
-
-ipcMain.handle('db:updateAssetType', async (_, assetId: number, type: string) => {
-  dbOperations.updateAssetType(assetId, type);
-  return true;
-});
-
-ipcMain.handle('db:deleteAsset', async (_, assetId: number) => {
-  dbOperations.deleteAsset(assetId);
-  return true;
-});
-
-ipcMain.handle('db:findAssetByFileName', async (_, fileName: string) => {
-  return dbOperations.findAssetByFileName(fileName);
-});
-
-// Transcript Segments
-ipcMain.handle('db:getSegments', async (_, assetId: number) => {
-  return dbOperations.getSegments(assetId);
-});
-
-ipcMain.handle('db:insertSegment', async (_, segment: any) => {
-  return dbOperations.insertSegment(segment);
-});
-
-ipcMain.handle('db:insertSegments', async (_, segments: any[]) => {
-  dbOperations.insertSegments(segments);
-  return true;
-});
-
-ipcMain.handle('db:deleteSegmentsByAsset', async (_, assetId: number) => {
-  dbOperations.deleteSegmentsByAsset(assetId);
-  return true;
-});
-
+// Lifecycle Management
 app.whenReady().then(() => {
   initDatabase();
+  registerIpcHandlers(); // <--- CRITICAL FIX: REGISTRATION
   createWindow();
 });
 
-app.on('before-quit', () => {
-  closeDatabase();
-});
-
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
-});
-
-app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow();
-});
+app.on('before-quit', closeDatabase);
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });

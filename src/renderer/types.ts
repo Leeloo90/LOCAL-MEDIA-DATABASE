@@ -16,9 +16,12 @@ export interface MediaAsset {
   file_name: string;
   file_path: string;
   start_tc: string;
+  end_tc: string;
   duration_frames: number;
   fps: number;
   type: MediaType;
+  resolution: string;
+  size: number;
   metadata: any;
 }
 

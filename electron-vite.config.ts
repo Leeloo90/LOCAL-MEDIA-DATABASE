@@ -9,35 +9,24 @@ export default defineConfig({
       lib: {
         entry: resolve(__dirname, 'src/main/main.ts'),
         formats: ['cjs']
-      },
-      rollupOptions: {
-        output: {
-          entryFileNames: '[name].js'
-        }
       }
     }
   },
   preload: {
     plugins: [externalizeDepsPlugin()],
     build: {
-      rollupOptions: {
-        output: {
-          format: 'cjs',
-          entryFileNames: '[name].js',
-          exports: 'auto'
-        }
-      }
+      lib: {
+        entry: resolve(__dirname, 'src/preload/preload.ts'),
+        formats: ['cjs']
+      },
+      outDir: resolve(__dirname, 'out/preload')
     }
   },
   renderer: {
     root: resolve(__dirname, 'src/renderer'),
     plugins: [react()],
-    resolve: {
-      alias: {
-        '@': resolve(__dirname, 'src/renderer')
-      }
-    },
     build: {
+      outDir: resolve(__dirname, 'out/renderer'),
       rollupOptions: {
         input: resolve(__dirname, 'src/renderer/index.html')
       }

@@ -4,8 +4,8 @@ import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
   // Filesystem & Dialogs
-  selectFolder: () => ipcRenderer.invoke('dialog:openDirectory'),
-  scanMedia: (path: string) => ipcRenderer.invoke('media:scan', path),
+  selectFiles: () => ipcRenderer.invoke('dialog:openFiles'),
+  scanMedia: (paths: string[]) => ipcRenderer.invoke('media:scan', paths),
 
   // Metadata Extraction (ffprobe bridge)
   getMetadata: (filePath: string) => ipcRenderer.invoke('get-metadata', filePath),
@@ -22,6 +22,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     updateAssetType: (assetId: number, type: string) => ipcRenderer.invoke('db:updateAssetType', assetId, type),
     deleteAsset: (assetId: number) => ipcRenderer.invoke('db:deleteAsset', assetId),
     findAssetByFileName: (fileName: string) => ipcRenderer.invoke('db:findAssetByFileName', fileName),
+
+    // destructive
+    clear: () => ipcRenderer.invoke('db:clear'),
 
     // Transcript Segments
     getSegments: (assetId: number) => ipcRenderer.invoke('db:getSegments', assetId),

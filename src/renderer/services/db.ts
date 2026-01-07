@@ -5,8 +5,8 @@ import { parseTranscript } from './parser';
 declare global {
   interface Window {
     electronAPI: {
-      selectFolder: () => Promise<string | null>;
-      scanMedia: (path: string) => Promise<any[]>;
+      selectFiles: () => Promise<string[] | null>;
+      scanMedia: (paths: string[]) => Promise<any[]>;
       getMetadata: (filePath: string) => Promise<any>;
       db: {
         getProjects: () => Promise<any[]>;
@@ -20,6 +20,7 @@ declare global {
         insertSegment: (segment: any) => Promise<number>;
         insertSegments: (segments: any[]) => Promise<boolean>;
         deleteSegmentsByAsset: (assetId: number) => Promise<boolean>;
+        clear: () => Promise<boolean>;
       };
     };
   }
@@ -53,9 +54,12 @@ class StoryGraphDB {
       file_name: a.file_name,
       file_path: a.file_path,
       start_tc: a.start_tc,
+      end_tc: a.end_tc,
       duration_frames: a.duration_frames,
       fps: a.fps,
       type: a.type as MediaType,
+      resolution: a.resolution,
+      size: a.size,
       metadata: a.metadata ? JSON.parse(a.metadata) : {}
     }));
   }
@@ -78,32 +82,20 @@ class StoryGraphDB {
     }));
   }
 
-  // Ingest media files from folder using Electron's filesystem API
-  async ingestFromFolder(projectId: number): Promise<MediaAsset[]> {
+  // Ingest media files using Electron's filesystem API
+  async ingestFiles(projectId: number): Promise<MediaAsset[]> {
     if (!window.electronAPI) {
-      console.warn('Native folder selection requires Electron environment.');
+      console.warn('Native file selection requires Electron environment.');
       return [];
     }
 
-    const folderPath = await window.electronAPI.selectFolder();
-    if (!folderPath) return [];
+    const filePaths = await window.electronAPI.selectFiles();
+    if (!filePaths || filePaths.length === 0) return [];
 
-    const scannedFiles = await window.electronAPI.scanMedia(folderPath);
+    const scannedFiles = await window.electronAPI.scanMedia(filePaths);
 
-    // Prepare assets for bulk insert
-    const assetsToInsert = scannedFiles.map(data => ({
-      project_id: projectId,
-      file_name: data.file_name,
-      file_path: data.file_path,
-      start_tc: data.start_tc,
-      duration_frames: data.duration_frames,
-      fps: data.fps,
-      type: 'BROLL',
-      metadata: JSON.stringify(data.metadata)
-    }));
-
-    // Insert all assets into SQLite
-    await window.electronAPI.db.insertAssets(assetsToInsert);
+    // The data from scanMedia is already in the shape the DB expects.
+    await window.electronAPI.db.insertAssets(scannedFiles);
 
     // Fetch the newly inserted assets
     return await this.getAssets(projectId);
@@ -157,6 +149,15 @@ class StoryGraphDB {
       return;
     }
     await window.electronAPI.db.deleteAsset(assetId);
+  }
+
+  // Clear all assets and segments from the database
+  async clear(): Promise<void> {
+    if (!window.electronAPI) {
+      console.warn('Electron API not available');
+      return;
+    }
+    await window.electronAPI.db.clear();
   }
 }
 
