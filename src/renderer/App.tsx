@@ -20,29 +20,35 @@ const App: React.FC = () => {
   }, [selectedProjectId]);
 
   useEffect(() => {
-    if (selectedAssetId !== null) {
-      setSegments(db.getTranscripts(selectedAssetId));
-    } else {
-      setSegments([]);
-    }
+    const loadSegments = async () => {
+      if (selectedAssetId !== null) {
+        const segs = await db.getTranscripts(selectedAssetId);
+        setSegments(segs);
+      } else {
+        setSegments([]);
+      }
+    };
+    loadSegments();
   }, [selectedAssetId, assets]);
 
-  const refreshData = () => {
-    setProjects(db.getProjects());
-    setAssets(db.getAssets(selectedProjectId));
+  const refreshData = async () => {
+    const projs = await db.getProjects();
+    const assts = await db.getAssets(selectedProjectId);
+    setProjects(projs);
+    setAssets(assts);
   };
 
   const handleMediaImport = async () => {
     // Native Electron Ingest
     await db.ingestFromFolder(selectedProjectId);
-    refreshData();
+    await refreshData();
   };
 
   const handleTranscriptMatch = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const files = Array.from(e.target.files) as File[];
       await db.matchTranscripts(files);
-      refreshData();
+      await refreshData();
     }
   };
 
