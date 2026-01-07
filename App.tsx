@@ -4,7 +4,7 @@ import { Layout } from './components/Layout';
 import { MediaPool } from './components/MediaPool';
 import { InspectorPanel } from './components/InspectorPanel';
 import { Project, MediaAsset, TranscriptSegment } from './types';
-import { db } from './services/mockDb';
+import { db } from './services/db';
 
 const App: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -13,7 +13,6 @@ const App: React.FC = () => {
   const [selectedAssetId, setSelectedAssetId] = useState<number | null>(null);
   const [segments, setSegments] = useState<TranscriptSegment[]>([]);
   
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const transcriptInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -33,18 +32,14 @@ const App: React.FC = () => {
     setAssets(db.getAssets(selectedProjectId));
   };
 
-  const handleMediaImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      // Fix: Cast Array.from result to File[] to match db.ingestFiles parameter type
-      const files = Array.from(e.target.files) as File[];
-      await db.ingestFiles(files, selectedProjectId);
-      refreshData();
-    }
+  const handleMediaImport = async () => {
+    // Native Electron Ingest
+    await db.ingestFromFolder(selectedProjectId);
+    refreshData();
   };
 
   const handleTranscriptMatch = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      // Fix: Cast Array.from result to File[] to match db.matchTranscripts parameter type
       const files = Array.from(e.target.files) as File[];
       await db.matchTranscripts(files);
       refreshData();
@@ -80,15 +75,7 @@ const App: React.FC = () => {
       }
     >
       <div className="h-full flex overflow-hidden">
-        {/* Hidden Inputs for File Dialogs */}
-        <input 
-          type="file" 
-          multiple 
-          className="hidden" 
-          ref={fileInputRef} 
-          onChange={handleMediaImport} 
-          accept=".mp4,.mov,.wav,.mp3"
-        />
+        {/* Only transcript input remains as browser input for this prototype stage */}
         <input 
           type="file" 
           multiple 
@@ -103,7 +90,7 @@ const App: React.FC = () => {
             assets={assets} 
             selectedAssetId={selectedAssetId}
             onSelect={setSelectedAssetId}
-            onImport={() => fileInputRef.current?.click()}
+            onImport={handleMediaImport}
             onTranscriptImport={() => transcriptInputRef.current?.click()}
           />
         </div>

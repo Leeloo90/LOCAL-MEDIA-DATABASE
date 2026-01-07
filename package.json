@@ -1,21 +1,21 @@
+
 {
-  "name": "story-graph:-local-bridge",
-  "private": true,
-  "version": "0.0.0",
+  "name": "story-graph-local-bridge",
+  "version": "1.0.0",
+  "main": "main.js",
+  "description": "Professional media ingest and transcript indexing engine.",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "start": "electron .",
+    "build": "electron-builder"
   },
   "dependencies": {
-    "react-dom": "^19.2.3",
-    "react": "^19.2.3"
+    "better-sqlite3": "^11.0.0",
+    "fluent-ffmpeg": "^2.1.3"
   },
   "devDependencies": {
-    "@types/node": "^22.14.0",
-    "@vitejs/plugin-react": "^5.0.0",
-    "typescript": "~5.8.2",
-    "vite": "^6.2.0"
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
+    "typescript": "^5.4.5"
   }
 }
