@@ -7,7 +7,21 @@ export enum MediaType {
 export interface Project {
   project_id: number;
   name: string;
-  description: string;
+  description: string | null;
+  fps: number;
+  resolution: string;
+  client: string | null;
+  status: 'active' | 'archived' | 'completed';
+  created_at: string;
+  last_edited: string;
+}
+
+export interface StoryGraph {
+  graph_id: number;
+  project_id: number;
+  name: string;
+  canvas_json: string;
+  created_at: string;
 }
 
 export interface MediaAsset {

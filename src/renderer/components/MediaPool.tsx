@@ -9,14 +9,31 @@ interface MediaPoolProps {
   onTranscriptImport: () => void;
 }
 
-export const MediaPool: React.FC<MediaPoolProps> = ({ 
-  assets, 
-  selectedAssetId, 
-  onSelect, 
+export const MediaPool: React.FC<MediaPoolProps> = ({
+  assets,
+  selectedAssetId,
+  onSelect,
   onImport,
-  onTranscriptImport 
+  onTranscriptImport
 }) => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
+
+  // Drag and Drop handler - Full clip with master timecode
+  const onDragStart = (event: React.DragEvent, asset: MediaAsset) => {
+    const fullClipPayload = {
+      type: 'FULL_CLIP',
+      asset_id: asset.asset_id,
+      start_tc: asset.start_tc,  // Master start timecode
+      end_tc: asset.end_tc,      // Master end timecode
+      file_name: asset.file_name,
+      file_path: asset.file_path,
+      duration_frames: asset.duration_frames,
+      fps: asset.fps,
+      asset_type: asset.type
+    };
+    event.dataTransfer.setData('application/storygraph', JSON.stringify(fullClipPayload));
+    event.dataTransfer.effectAllowed = 'move';
+  };
 
   // Helper to format bytes to readable MB/GB
   const formatFileSize = (bytes: number) => {
@@ -84,12 +101,14 @@ export const MediaPool: React.FC<MediaPoolProps> = ({
           viewMode === 'grid' ? (
             <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
               {assets.map(asset => (
-                <div 
+                <div
                   key={asset.asset_id}
+                  draggable
+                  onDragStart={(e) => onDragStart(e, asset)}
                   onClick={() => onSelect(asset.asset_id)}
-                  className={`group cursor-pointer rounded-lg overflow-hidden border transition-all duration-200 ${
-                    selectedAssetId === asset.asset_id 
-                    ? 'border-indigo-500 ring-2 ring-indigo-500/20 bg-[#1a1a1a] scale-[1.02]' 
+                  className={`group cursor-move rounded-lg overflow-hidden border transition-all duration-200 ${
+                    selectedAssetId === asset.asset_id
+                    ? 'border-indigo-500 ring-2 ring-indigo-500/20 bg-[#1a1a1a] scale-[1.02]'
                     : 'border-[#2a2a2a] bg-[#121212] hover:border-[#444]'
                   }`}
                 >
@@ -140,10 +159,12 @@ export const MediaPool: React.FC<MediaPoolProps> = ({
   </thead>
   <tbody className="divide-y divide-[#1a1a1a]">
     {assets.map(asset => (
-      <tr 
-        key={asset.asset_id} 
+      <tr
+        key={asset.asset_id}
+        draggable
+        onDragStart={(e) => onDragStart(e, asset)}
         onClick={() => onSelect(asset.asset_id)}
-        className={`group text-[11px] cursor-pointer transition-colors ${
+        className={`group text-[11px] cursor-move transition-colors ${
           selectedAssetId === asset.asset_id ? 'bg-indigo-500/10 text-white' : 'text-gray-400 hover:bg-[#161616]'
         }`}
       >

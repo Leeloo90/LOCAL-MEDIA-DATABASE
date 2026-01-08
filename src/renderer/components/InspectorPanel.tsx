@@ -21,6 +21,22 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({ asset, segments,
       onSegmentsUpdate();
     }
   };
+
+  const onSegmentDragStart = (event: React.DragEvent, segment: TranscriptSegment) => {
+    // TRIM-BASED DRAG: Package timecode window + text content for editorial precision
+    const trimPayload = {
+      type: 'TRANSCRIPT_TRIM',
+      asset_id: segment.asset_id,
+      start_tc: segment.time_in,  // Specific In point for XML export
+      end_tc: segment.time_out,    // Specific Out point for XML export
+      content: segment.content,
+      speaker_label: segment.speaker_label,
+      word_map: segment.word_map
+    };
+    event.dataTransfer.setData('application/storygraph', JSON.stringify(trimPayload));
+    event.dataTransfer.effectAllowed = 'move';
+  };
+
   if (!asset) {
     return (
       <div className="h-full flex items-center justify-center text-gray-600 bg-[#121212] border-l border-[#2a2a2a]">
@@ -105,7 +121,12 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({ asset, segments,
           ) : (
             <div className="space-y-4">
               {segments.map((segment) => (
-                <div key={segment.segment_id} className="group">
+                <div
+                  key={segment.segment_id}
+                  draggable
+                  onDragStart={(e) => onSegmentDragStart(e, segment)}
+                  className="group cursor-move"
+                >
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[11px] font-bold text-indigo-400">
                       {segment.speaker_label}

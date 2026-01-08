@@ -139,16 +139,16 @@ function registerIpcHandlers() {
   });
 
  // src/main/main.ts - Updated Handler Only
-ipcMain.handle('media:scan', async (_, files: string[]) => {
+ipcMain.handle('media:scan', async (_, files: string[], projectId: number) => {
   return await Promise.all(
     files.map(async (file) => {
       const meta = await getMetadata(file);
       const fps = meta?.fps || 23.976;
       const durationFrames = Math.round((meta?.duration || 0) * fps);
       const startFrames = tcToTotalFrames(meta?.start_tc, fps);
-      
+
       return {
-        project_id: 1,
+        project_id: projectId || 1,
         file_name: path.basename(file),
         file_path: file,
         start_tc: meta?.start_tc || '00:00:00:00',
@@ -169,7 +169,23 @@ ipcMain.handle('media:scan', async (_, files: string[]) => {
 });
 
   // DATABASE HANDLERS
+  // Project Management
   ipcMain.handle('db:getProjects', () => dbOperations.getProjects());
+  ipcMain.handle('db:createProject', (_, name, options) => dbOperations.createProject(name, options));
+  ipcMain.handle('db:updateProject', (_, projectId, updates) => {
+    dbOperations.updateProject(projectId, updates);
+    return true;
+  });
+  ipcMain.handle('db:deleteProject', (_, projectId) => {
+    dbOperations.deleteProject(projectId);
+    return true;
+  });
+  ipcMain.handle('db:touchProject', (_, projectId) => {
+    dbOperations.touchProject(projectId);
+    return true;
+  });
+
+  // Media Assets
   ipcMain.handle('db:getAssets', (_, pid) => dbOperations.getAssets(pid));
   ipcMain.handle('db:insertAssets', (_, assets) => {
     dbOperations.insertAssets(assets);
@@ -189,6 +205,49 @@ ipcMain.handle('media:scan', async (_, files: string[]) => {
 
   ipcMain.handle('db:renameSpeaker', (_, assetId, oldName, newName) => {
     dbOperations.renameSpeaker(assetId, oldName, newName);
+    return true;
+  });
+
+  // Story Graph handlers
+  ipcMain.handle('db:getStoryGraphs', (_, projectId) => dbOperations.getStoryGraphs(projectId));
+  ipcMain.handle('db:createStoryGraph', (_, projectId, name) => dbOperations.createStoryGraph(projectId, name));
+  ipcMain.handle('db:updateCanvasState', (_, graphId, canvasJson) => {
+    dbOperations.updateCanvasState(graphId, canvasJson);
+    return true;
+  });
+  ipcMain.handle('db:getCanvasState', (_, graphId) => dbOperations.getCanvasState(graphId));
+  ipcMain.handle('db:deleteStoryGraph', (_, graphId) => {
+    dbOperations.deleteStoryGraph(graphId);
+    return true;
+  });
+
+  // Timeline Node handlers
+  ipcMain.handle('db:saveTimelineNode', (_, node) => {
+    dbOperations.saveTimelineNode(node);
+    return true;
+  });
+  ipcMain.handle('db:getTimelineNodes', (_, graphId) => dbOperations.getTimelineNodes(graphId));
+  ipcMain.handle('db:deleteTimelineNode', (_, nodeId) => {
+    dbOperations.deleteTimelineNode(nodeId);
+    return true;
+  });
+
+  // Story Node handlers (Project-Scoped Canvas)
+  ipcMain.handle('db:getStoryNodes', (_, projectId) => dbOperations.getStoryNodes(projectId));
+  ipcMain.handle('db:saveStoryNode', (_, node) => {
+    dbOperations.saveStoryNode(node);
+    return true;
+  });
+  ipcMain.handle('db:updateStoryNodePosition', (_, nodeId, x, y) => {
+    dbOperations.updateStoryNodePosition(nodeId, x, y);
+    return true;
+  });
+  ipcMain.handle('db:deleteStoryNode', (_, nodeId) => {
+    dbOperations.deleteStoryNode(nodeId);
+    return true;
+  });
+  ipcMain.handle('db:clearStoryNodes', (_, projectId) => {
+    dbOperations.clearStoryNodes(projectId);
     return true;
   });
 
