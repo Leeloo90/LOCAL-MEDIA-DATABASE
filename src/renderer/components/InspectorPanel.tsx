@@ -1,13 +1,26 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { MediaAsset, TranscriptSegment, MediaType } from '../types';
+import { SpeakerRenameModal } from './SpeakerRenameModal';
 
 interface InspectorPanelProps {
   asset: MediaAsset | null;
   segments: TranscriptSegment[];
+  onSegmentsUpdate: () => void;
 }
 
-export const InspectorPanel: React.FC<InspectorPanelProps> = ({ asset, segments }) => {
+export const InspectorPanel: React.FC<InspectorPanelProps> = ({ asset, segments, onSegmentsUpdate }) => {
+  const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
+
+  // Extract unique speaker names from segments
+  const uniqueSpeakers = Array.from(new Set(segments.map(s => s.speaker_label)));
+
+  const handleRenameSpeaker = async (assetId: number, oldName: string, newName: string) => {
+    if (window.electronAPI) {
+      await window.electronAPI.db.renameSpeaker(assetId, oldName, newName);
+      onSegmentsUpdate();
+    }
+  };
   if (!asset) {
     return (
       <div className="h-full flex items-center justify-center text-gray-600 bg-[#121212] border-l border-[#2a2a2a]">
@@ -66,17 +79,28 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({ asset, segments 
               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 6.1H3"/><path d="M21 12.1H3"/><path d="M15.1 18H3"/></svg>
               Transcript Segments
             </h4>
-            <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase ${
-              asset.type === MediaType.DIALOGUE ? 'bg-green-900/30 text-green-400' : 'bg-gray-800 text-gray-500'
-            }`}>
-              {asset.type}
-            </span>
+            <div className="flex items-center gap-2">
+              {segments.length > 0 && (
+                <button
+                  onClick={() => setIsRenameModalOpen(true)}
+                  className="px-2 py-1 text-[9px] font-medium text-indigo-400 hover:text-indigo-300 bg-indigo-950/30 hover:bg-indigo-950/50 border border-indigo-900/50 rounded transition-colors"
+                  title="Rename speakers"
+                >
+                  Edit Speakers
+                </button>
+              )}
+              <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase ${
+                asset.type === MediaType.DIALOGUE ? 'bg-green-900/30 text-green-400' : 'bg-gray-800 text-gray-500'
+              }`}>
+                {asset.type}
+              </span>
+            </div>
           </div>
 
           {segments.length === 0 ? (
             <div className="py-12 flex flex-col items-center justify-center text-gray-600 bg-[#0c0c0c]/50 rounded-lg border border-dashed border-[#2a2a2a]">
               <p className="text-[11px]">No transcript data available.</p>
-              <p className="text-[9px] mt-1 italic">Use "Match Transcripts" to link .txt files.</p>
+              <p className="text-[9px] mt-1 italic">Use "Match Transcripts" to link .srtx files.</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -84,7 +108,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({ asset, segments 
                 <div key={segment.segment_id} className="group">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[11px] font-bold text-indigo-400">
-                      {segment.speaker}
+                      {segment.speaker_label}
                     </span>
                     <span className="text-[10px] font-mono text-gray-500 group-hover:text-gray-300">
                       {segment.time_in} - {segment.time_out}
@@ -101,6 +125,17 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({ asset, segments 
           )}
         </section>
       </div>
+
+      {/* Speaker Rename Modal */}
+      {asset && (
+        <SpeakerRenameModal
+          isOpen={isRenameModalOpen}
+          onClose={() => setIsRenameModalOpen(false)}
+          assetId={asset.asset_id}
+          speakers={uniqueSpeakers}
+          onRename={handleRenameSpeaker}
+        />
+      )}
     </div>
   );
 };

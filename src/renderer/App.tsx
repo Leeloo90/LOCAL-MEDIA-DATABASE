@@ -12,22 +12,21 @@ const App: React.FC = () => {
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [selectedAssetId, setSelectedAssetId] = useState<number | null>(null);
   const [segments, setSegments] = useState<TranscriptSegment[]>([]);
-  
-  const transcriptInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     refreshData();
   }, [selectedProjectId]);
 
+  const loadSegments = async () => {
+    if (selectedAssetId !== null) {
+      const segs = await db.getTranscripts(selectedAssetId);
+      setSegments(segs);
+    } else {
+      setSegments([]);
+    }
+  };
+
   useEffect(() => {
-    const loadSegments = async () => {
-      if (selectedAssetId !== null) {
-        const segs = await db.getTranscripts(selectedAssetId);
-        setSegments(segs);
-      } else {
-        setSegments([]);
-      }
-    };
     loadSegments();
   }, [selectedAssetId, assets]);
 
@@ -39,15 +38,18 @@ const App: React.FC = () => {
   };
 
   const handleMediaImport = async () => {
-    // Native Electron Ingest
     await db.ingestFiles(selectedProjectId);
     await refreshData();
   };
 
-  const handleTranscriptMatch = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const files = Array.from(e.target.files) as File[];
-      await db.matchTranscripts(files);
+  const handleTranscriptMatch = async () => {
+    if (selectedAssetId === null) {
+      alert("Please select a media file first to link a transcript.");
+      return;
+    }
+    
+    const success = await db.matchTranscript(selectedAssetId);
+    if (success) {
       await refreshData();
     }
   };
@@ -93,29 +95,20 @@ const App: React.FC = () => {
       }
     >
       <div className="h-full flex overflow-hidden">
-        {/* Only transcript input remains as browser input for this prototype stage */}
-        <input 
-          type="file" 
-          multiple 
-          className="hidden" 
-          ref={transcriptInputRef} 
-          onChange={handleTranscriptMatch} 
-          accept=".txt,.srtx"
-        />
-
         <div className="flex-1 min-w-0">
           <MediaPool 
             assets={assets} 
             selectedAssetId={selectedAssetId}
             onSelect={setSelectedAssetId}
             onImport={handleMediaImport}
-            onTranscriptImport={() => transcriptInputRef.current?.click()}
+            onTranscriptImport={handleTranscriptMatch}
           />
         </div>
         <div className="w-[350px] shrink-0">
-          <InspectorPanel 
+          <InspectorPanel
             asset={selectedAsset}
             segments={segments}
+            onSegmentsUpdate={loadSegments}
           />
         </div>
       </div>

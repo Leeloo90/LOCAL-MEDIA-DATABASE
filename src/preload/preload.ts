@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Metadata Extraction (ffprobe bridge)
   getMetadata: (filePath: string) => ipcRenderer.invoke('get-metadata', filePath),
+  matchTranscript: (assetId: number) => ipcRenderer.invoke('transcript:match-manual', assetId),
 
   // Database Operations (SQLite Bridge)
   db: {
@@ -31,6 +32,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     insertSegment: (segment: any) => ipcRenderer.invoke('db:insertSegment', segment),
     insertSegments: (segments: any[]) => ipcRenderer.invoke('db:insertSegments', segments),
     deleteSegmentsByAsset: (assetId: number) => ipcRenderer.invoke('db:deleteSegmentsByAsset', assetId),
+    renameSpeaker: (assetId: number, oldName: string, newName: string) => ipcRenderer.invoke('db:renameSpeaker', assetId, oldName, newName),
   },
 
   // Platform Info

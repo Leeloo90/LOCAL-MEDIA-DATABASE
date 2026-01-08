@@ -1,3 +1,4 @@
+// Shared types for main and renderer processes
 
 export enum MediaType {
   BROLL = 'BROLL',

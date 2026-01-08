@@ -1,6 +1,5 @@
 
 import { Project, MediaAsset, TranscriptSegment, MediaType } from '../types';
-import { parseTranscript } from './parser';
 
 declare global {
   interface Window {
@@ -8,6 +7,7 @@ declare global {
       selectFiles: () => Promise<string[] | null>;
       scanMedia: (paths: string[]) => Promise<any[]>;
       getMetadata: (filePath: string) => Promise<any>;
+      matchTranscript: (assetId: number) => Promise<boolean>;
       db: {
         getProjects: () => Promise<any[]>;
         getAssets: (projectId: number) => Promise<any[]>;
@@ -20,6 +20,7 @@ declare global {
         insertSegment: (segment: any) => Promise<number>;
         insertSegments: (segments: any[]) => Promise<boolean>;
         deleteSegmentsByAsset: (assetId: number) => Promise<boolean>;
+        renameSpeaker: (assetId: number, oldName: string, newName: string) => Promise<boolean>;
         clear: () => Promise<boolean>;
       };
     };
@@ -74,11 +75,11 @@ class StoryGraphDB {
     return segments.map((s: any) => ({
       segment_id: s.segment_id,
       asset_id: s.asset_id,
-      speaker: s.speaker,
+      speaker_label: s.speaker_label,
       time_in: s.time_in,
       time_out: s.time_out,
       content: s.content,
-      word_data: s.word_data ? JSON.parse(s.word_data) : []
+      word_map: s.word_map || '[]'
     }));
   }
 
@@ -101,47 +102,6 @@ class StoryGraphDB {
     return await this.getAssets(projectId);
   }
 
-  // Match transcript files to existing media assets
-  async matchTranscripts(transcriptFiles: File[]): Promise<void> {
-    if (!window.electronAPI) {
-      console.warn('Electron API not available');
-      return;
-    }
-
-    for (const file of transcriptFiles) {
-      const content = await file.text();
-      // Matcher: Strip suffixes (e.g., C0043_SAT.txt becomes C0043)
-      const baseName = file.name.replace(/\.[^/.]+$/, "").split('_')[0];
-
-      // Find matching asset in database
-      const matchedAsset = await window.electronAPI.db.findAssetByFileName(baseName);
-
-      if (matchedAsset) {
-        // Type Promotion: BROLL -> DIALOGUE
-        await window.electronAPI.db.updateAssetType(matchedAsset.asset_id, 'DIALOGUE');
-
-        // Parse transcript into segments
-        const parsedSegments = parseTranscript(content, matchedAsset.asset_id);
-
-        // Delete old segments for this asset (if any)
-        await window.electronAPI.db.deleteSegmentsByAsset(matchedAsset.asset_id);
-
-        // Prepare segments for insertion
-        const segmentsToInsert = parsedSegments.map(s => ({
-          asset_id: matchedAsset.asset_id,
-          speaker: s.speaker,
-          time_in: s.time_in,
-          time_out: s.time_out,
-          content: s.content,
-          word_data: JSON.stringify(s.word_data || [])
-        }));
-
-        // Insert all segments
-        await window.electronAPI.db.insertSegments(segmentsToInsert);
-      }
-    }
-  }
-
   // Delete an asset and its associated segments
   async deleteAsset(assetId: number): Promise<void> {
     if (!window.electronAPI) {
@@ -158,6 +118,14 @@ class StoryGraphDB {
       return;
     }
     await window.electronAPI.db.clear();
+  }
+
+  async matchTranscript(assetId: number): Promise<boolean> {
+    if (!window.electronAPI) {
+      console.warn('Electron API not available');
+      return false;
+    }
+    return await window.electronAPI.matchTranscript(assetId);
   }
 }
 

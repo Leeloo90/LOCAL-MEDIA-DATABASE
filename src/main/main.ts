@@ -5,6 +5,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { fileURLToPath } from 'url';
 import { initDatabase, closeDatabase, dbOperations } from './database';
+import { parseTranscript } from './parser';
 
 const execAsync = promisify(exec);
 
@@ -183,6 +184,34 @@ ipcMain.handle('media:scan', async (_, files: string[]) => {
   ipcMain.handle('db:getSegments', (_, aid) => dbOperations.getSegments(aid));
   ipcMain.handle('db:updateAssetType', (_, aid, type) => {
     dbOperations.updateAssetType(aid, type);
+    return true;
+  });
+
+  ipcMain.handle('db:renameSpeaker', (_, assetId, oldName, newName) => {
+    dbOperations.renameSpeaker(assetId, oldName, newName);
+    return true;
+  });
+
+  ipcMain.handle('transcript:match-manual', async (_, assetId: number) => {
+    if (!mainWindow) return false;
+    const { filePaths } = await dialog.showOpenDialog(mainWindow, {
+      title: 'Select Transcript for Asset',
+      filters: [{ name: 'Transcript Files', extensions: ['srtx', 'srt'] }]
+    });
+  
+    if (!filePaths || filePaths.length === 0) return false;
+  
+    const content = fs.readFileSync(filePaths[0], 'utf-8');
+    
+    // Use the existing parser logic
+    const segments = parseTranscript(content, assetId); 
+    
+    // Save to SQLite
+    dbOperations.insertSegments(segments);
+    
+    // Promote asset type to DIALOGUE
+    dbOperations.updateAssetType(assetId, 'DIALOGUE');
+    
     return true;
   });
 }

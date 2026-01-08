@@ -1,6 +1,6 @@
 
 import { Project, MediaAsset, TranscriptSegment, MediaType } from '../types';
-import { parseTranscript } from './parser';
+// Note: parseTranscript is handled by main process in Electron environment
 
 class StoryGraphDB {
   private projects: Project[] = [
@@ -73,7 +73,7 @@ class StoryGraphDB {
   async matchTranscripts(transcriptFiles: File[]) {
     for (const file of transcriptFiles) {
       const content = await file.text();
-      // Matcher: Strip suffixes (e.g., C0043_SAT.txt becomes C0043)
+      // Matcher: Strip suffixes (e.g., C0043_SAT.srtx becomes C0043)
       const baseName = file.name.replace(/\.[^/.]+$/, "").split('_')[0];
       
       const matchedAsset = this.assets.find(a => a.file_name.startsWith(baseName));
@@ -82,13 +82,17 @@ class StoryGraphDB {
         // Type Promotion
         matchedAsset.type = MediaType.DIALOGUE;
         
-        // Parse and save segments
-        const parsedSegments = parseTranscript(content, matchedAsset.asset_id);
-        const segmentsWithIds = parsedSegments.map(s => ({
-          ...s,
+        // Note: In mock environment, we simulate parsed segments
+        // Real parsing happens in main process via parseTranscript
+        const segmentsWithIds: TranscriptSegment[] = [{
           segment_id: Math.floor(Math.random() * 1000000),
-          word_data: []
-        })) as TranscriptSegment[];
+          asset_id: matchedAsset.asset_id,
+          speaker_label: 'Speaker 1',
+          time_in: '00:00:00:00',
+          time_out: '00:00:10:00',
+          content: 'Mock transcript content',
+          word_map: '[]'
+        }];
         
         // Replace existing transcripts for this asset if any
         this.segments = [

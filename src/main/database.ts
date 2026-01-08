@@ -32,19 +32,19 @@ const SCHEMA = `
     FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
   );
 
-  CREATE TABLE IF NOT EXISTS transcript_segments (
+  CREATE TABLE IF NOT EXISTS transcripts (
     segment_id INTEGER PRIMARY KEY AUTOINCREMENT,
     asset_id INTEGER NOT NULL,
-    speaker TEXT NOT NULL,
+    speaker_label TEXT NOT NULL,
     time_in TEXT NOT NULL,
     time_out TEXT NOT NULL,
     content TEXT NOT NULL,
-    word_data TEXT,
+    word_map TEXT,
     FOREIGN KEY (asset_id) REFERENCES media_assets(asset_id) ON DELETE CASCADE
   );
 
   CREATE INDEX IF NOT EXISTS idx_media_project ON media_assets(project_id);
-  CREATE INDEX IF NOT EXISTS idx_segments_asset ON transcript_segments(asset_id);
+  CREATE INDEX IF NOT EXISTS idx_transcripts_asset ON transcripts(asset_id);
 `;
 
 export function initDatabase(): Database.Database {
@@ -62,7 +62,7 @@ export function initDatabase(): Database.Database {
   try {
     const tableInfo = db.prepare("PRAGMA table_info(media_assets)").all() as any[];
     const columns = tableInfo.map(col => col.name);
-    
+
     const requiredColumns = [
       { name: 'end_tc', type: 'TEXT DEFAULT "00:00:00:00" NOT NULL' },
       { name: 'resolution', type: 'TEXT' },
@@ -78,6 +78,30 @@ export function initDatabase(): Database.Database {
     }
   } catch (e) {
     console.error('Migration check failed:', e);
+  }
+
+  // --- TRANSCRIPT TABLE MIGRATION ---
+  // Migrate from old transcript_segments table to new transcripts table
+  try {
+    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as any[];
+    const tableNames = tables.map(t => t.name);
+
+    if (tableNames.includes('transcript_segments')) {
+      console.log('--- DB MIGRATION: Migrating transcript_segments to transcripts ---');
+
+      // Copy data from old table to new table
+      db.exec(`
+        INSERT INTO transcripts (segment_id, asset_id, speaker_label, time_in, time_out, content, word_map)
+        SELECT segment_id, asset_id, speaker, time_in, time_out, content, word_data
+        FROM transcript_segments;
+      `);
+
+      // Drop old table
+      db.exec('DROP TABLE transcript_segments;');
+      console.log('--- DB MIGRATION: transcript_segments migrated successfully ---');
+    }
+  } catch (e) {
+    console.error('Transcript table migration failed:', e);
   }
 
   // Create default project if none exists
@@ -164,13 +188,13 @@ export const dbOperations = {
   },
 
   getSegments(assetId: number) {
-    return getDatabase().prepare('SELECT * FROM transcript_segments WHERE asset_id = ?').all(assetId);
+    return getDatabase().prepare('SELECT * FROM transcripts WHERE asset_id = ?').all(assetId);
   },
 
   insertSegments(segments: any[]) {
     const db = getDatabase();
     const insert = db.prepare(`
-      INSERT INTO transcript_segments (asset_id, speaker, time_in, time_out, content, word_data)
+      INSERT INTO transcripts (asset_id, speaker_label, time_in, time_out, content, word_map)
       VALUES (?, ?, ?, ?, ?, ?)
     `);
 
@@ -178,11 +202,11 @@ export const dbOperations = {
       for (const segment of segmentList) {
         insert.run(
           segment.asset_id,
-          segment.speaker,
+          segment.speaker_label,
           segment.time_in,
           segment.time_out,
           segment.content,
-          segment.word_data
+          segment.word_map
         );
       }
     });
@@ -195,8 +219,14 @@ export const dbOperations = {
 
   clearAllData() {
     const db = getDatabase();
-    db.prepare('DELETE FROM transcript_segments').run();
+    db.prepare('DELETE FROM transcripts').run();
     db.prepare('DELETE FROM media_assets').run();
     console.log('--- STORY GRAPH: Database Cleared ---');
+  },
+
+  renameSpeaker(assetId: number, oldName: string, newName: string) {
+    getDatabase()
+      .prepare('UPDATE transcripts SET speaker_label = ? WHERE asset_id = ? AND speaker_label = ?')
+      .run(newName, assetId, oldName);
   }
 };
