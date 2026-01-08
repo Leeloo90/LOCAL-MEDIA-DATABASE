@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { MediaPool } from './MediaPool';
 import { InspectorPanel } from './InspectorPanel';
 import { StoryCanvas } from './StoryCanvas';
+import { WordHighlighterModal } from './WordHighlighterModal'; // Added import
 import { Project, MediaAsset, TranscriptSegment } from '../types';
 import { db } from '../services/db';
 
@@ -59,6 +60,14 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBackToProjects 
     if (success) {
       await refreshData();
     }
+  };
+
+  const [highlightingSegment, setHighlightingSegment] = useState<TranscriptSegment | null>(null);
+
+  const handleDragStart = (event: React.DragEvent<HTMLDivElement>, asset: MediaAsset) => {
+    event.dataTransfer.setData('asset/id', String(asset.asset_id));
+    event.dataTransfer.setData('asset/type', asset.type);
+    event.dataTransfer.effectAllowed = 'move';
   };
 
   const selectedAsset = assets.find(a => a.asset_id === selectedAssetId) || null;
@@ -132,9 +141,9 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBackToProjects 
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex overflow-hidden">
-        <div className="flex-1 min-w-0">
-          {viewMode === 'pool' ? (
+      {viewMode === 'pool' ? (
+        <div className="flex-1 flex overflow-hidden">
+          <div className="flex-1 min-w-0">
             <MediaPool
               assets={assets}
               selectedAssetId={selectedAssetId}
@@ -142,23 +151,79 @@ export const Workspace: React.FC<WorkspaceProps> = ({ project, onBackToProjects 
               onImport={handleMediaImport}
               onTranscriptImport={handleTranscriptMatch}
             />
-          ) : (
-            <StoryCanvas
-              projectId={project.project_id}
-              assets={assets}
-              selectedAssetId={selectedAssetId}
-              onSelect={setSelectedAssetId}
+          </div>
+          <div className="w-[350px] shrink-0">
+            <InspectorPanel
+              asset={selectedAsset}
+              segments={segments}
+              onSegmentsUpdate={loadSegments}
             />
-          )}
+          </div>
         </div>
-        <div className="w-[350px] shrink-0">
-          <InspectorPanel
-            asset={selectedAsset}
-            segments={segments}
-            onSegmentsUpdate={loadSegments}
+      ) : ( // viewMode === 'canvas'
+        <div className="flex-1 flex h-full w-full overflow-hidden bg-[#0c0c0c] relative">
+          {/* Floating Mini Media Pool */}
+          <div className="absolute left-4 top-4 bottom-4 w-56 bg-[#121212]/90 border border-[#2a2a2a] rounded-lg z-20 flex flex-col backdrop-blur-md shadow-2xl">
+            <div className="p-3 border-b border-[#2a2a2a] flex justify-between items-center">
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Library</span>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+              {assets.map(asset => (
+                <div
+                  key={asset.asset_id}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, asset)}
+                  onClick={() => setSelectedAssetId(asset.asset_id)}
+                  className={`p-2 rounded border transition-all cursor-pointer ${
+                    selectedAssetId === asset.asset_id ? 'bg-indigo-600/20 border-indigo-500' : 'bg-[#1a1a1a] border-[#2a2a2a] hover:border-gray-500'
+                  }`}
+                >
+                  <p className="text-[11px] text-white truncate font-medium">{asset.file_name}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className={`text-[8px] px-1 rounded uppercase font-bold ${
+                      asset.type === 'DIALOGUE' ? 'bg-green-900/40 text-green-400' : 'bg-gray-800 text-gray-400'
+                    }`}>
+                      {asset.type}
+                    </span>
+                    <span className="text-[9px] text-gray-600 font-mono">{asset.resolution}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Main Canvas Area */}
+          <StoryCanvas
+            projectId={project.project_id}
+            assets={assets}
+            selectedAssetId={selectedAssetId}
+            onSelect={setSelectedAssetId}
           />
+
+          {/* Existing Inspector Panel on the Right */}
+          <div className="w-80 border-l border-[#2a2a2a]">
+            <InspectorPanel
+              asset={selectedAsset}
+              segments={segments}
+              onSegmentDoubleClick={(segment) => setHighlightingSegment(segment)}
+              onSegmentsUpdate={loadSegments}
+            />
+          </div>
         </div>
-      </div>
+      )}
+
+      {highlightingSegment && selectedAsset && (
+        <WordHighlighterModal
+          segment={highlightingSegment}
+          onConfirm={(trim) => {
+            console.log('Trim confirmed:', trim);
+            // Here you would typically create a new story node with the trimmed data
+            // For now, just close the modal
+            setHighlightingSegment(null);
+          }}
+          onClose={() => setHighlightingSegment(null)}
+        />
+      )}
     </div>
   );
 };

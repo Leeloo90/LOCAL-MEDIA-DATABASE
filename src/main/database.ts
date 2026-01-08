@@ -94,6 +94,16 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_graphs_project ON story_graphs(project_id);
   CREATE INDEX IF NOT EXISTS idx_nodes_graph ON timeline_nodes(graph_id);
   CREATE INDEX IF NOT EXISTS idx_story_nodes_project ON story_nodes(project_id);
+
+  CREATE TABLE IF NOT EXISTS story_edges (
+    edge_id TEXT PRIMARY KEY,
+    project_id INTEGER NOT NULL,
+    source_node TEXT NOT NULL,
+    target_node TEXT NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_story_edges_project ON story_edges(project_id);
 `;
 
 export function initDatabase(): Database.Database {
@@ -471,5 +481,21 @@ export const dbOperations = {
 
   clearStoryNodes(projectId: number) {
     getDatabase().prepare('DELETE FROM story_nodes WHERE project_id = ?').run(projectId);
+  },
+
+  // Story Edge Operations
+  saveStoryEdge(edge: { edge_id: string; project_id: number; source_node: string; target_node: string; }) {
+    getDatabase().prepare(`
+      INSERT OR REPLACE INTO story_edges (edge_id, project_id, source_node, target_node)
+      VALUES (?, ?, ?, ?)
+    `).run(edge.edge_id, edge.project_id, edge.source_node, edge.target_node);
+  },
+
+  getStoryEdges(projectId: number) {
+    return getDatabase().prepare('SELECT * FROM story_edges WHERE project_id = ?').all(projectId);
+  },
+
+  deleteStoryEdge(edgeId: string) {
+    getDatabase().prepare('DELETE FROM story_edges WHERE edge_id = ?').run(edgeId);
   }
 };
