@@ -1,16 +1,17 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import ReactFlow, {
+import {
+  ReactFlow, // <--- Add curly braces here
   addEdge,
   Background,
   Connection,
   Controls,
   MiniMap,
-  Node,
-  Edge,
   useNodesState,
   useEdgesState,
-} from 'reactflow';
-import 'reactflow/dist/style.css';
+  type Node, // Added 'type' for cleaner TS compilation
+  type Edge,
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
 import { Project } from '../types';
 
 interface StoryCanvasProps {
