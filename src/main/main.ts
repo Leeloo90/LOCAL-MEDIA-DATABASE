@@ -138,36 +138,35 @@ function registerIpcHandlers() {
     return filePaths || [];
   });
 
- // src/main/main.ts - Updated Handler Only
-ipcMain.handle('media:scan', async (_, files: string[], projectId: number) => {
-  return await Promise.all(
-    files.map(async (file) => {
-      const meta = await getMetadata(file);
-      const fps = meta?.fps || 23.976;
-      const durationFrames = Math.round((meta?.duration || 0) * fps);
-      const startFrames = tcToTotalFrames(meta?.start_tc, fps);
-
-      return {
-        project_id: projectId || 1,
-        file_name: path.basename(file),
-        file_path: file,
-        start_tc: meta?.start_tc || '00:00:00:00',
-        end_tc: framesToTcString(startFrames + durationFrames, fps),
-        fps,
-        duration_frames: durationFrames,
-        type: 'BROLL',
-        // Flattened properties for the database columns
-        resolution: meta?.resolution || 'N/A', 
-        size: meta?.size || 0,
-        metadata: JSON.stringify({
-          original_duration: meta?.duration,
-          codec: meta?.codec // Stored in JSON but hidden from table
-        })
-      };
-    })
-  );
-});
-
+ ipcMain.handle('media:scan', async (_, files: string[], projectId: number) => {
+   const targetProjectId = projectId || 1;
+   return await Promise.all(
+     files.map(async (file) => {
+       const meta = await getMetadata(file);
+       const fps = meta?.fps || 23.976;
+       const durationFrames = Math.round((meta?.duration || 0) * fps);
+       const startFrames = tcToTotalFrames(meta?.start_tc, fps);
+       
+       return {
+         project_id: targetProjectId,
+         file_name: path.basename(file),
+         file_path: file,
+         start_tc: meta?.start_tc || '00:00:00:00',
+         end_tc: framesToTcString(startFrames + durationFrames, fps),
+         fps,
+         duration_frames: durationFrames,
+         type: 'BROLL',
+         // Flattened properties for the database columns
+         resolution: meta?.resolution || 'N/A', 
+         size: meta?.size || 0,
+         metadata: JSON.stringify({
+           original_duration: meta?.duration,
+           codec: meta?.codec // Stored in JSON but hidden from table
+         })
+       };
+     })
+   );
+ });
   // DATABASE HANDLERS
   // Project Management
   ipcMain.handle('db:getProjects', () => dbOperations.getProjects());
@@ -248,6 +247,17 @@ ipcMain.handle('media:scan', async (_, files: string[], projectId: number) => {
   });
   ipcMain.handle('db:clearStoryNodes', (_, projectId) => {
     dbOperations.clearStoryNodes(projectId);
+    return true;
+  });
+
+  // Story Edge Handlers
+  ipcMain.handle('db:saveStoryEdge', (_, edge) => {
+    dbOperations.saveStoryEdge(edge);
+    return true;
+  });
+  ipcMain.handle('db:getStoryEdges', (_, projectId) => dbOperations.getStoryEdges(projectId));
+  ipcMain.handle('db:deleteStoryEdge', (_, edgeId) => {
+    dbOperations.deleteStoryEdge(edgeId);
     return true;
   });
 

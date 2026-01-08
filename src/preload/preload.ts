@@ -5,7 +5,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 contextBridge.exposeInMainWorld('electronAPI', {
   // Filesystem & Dialogs
   selectFiles: () => ipcRenderer.invoke('dialog:openFiles'),
-  scanMedia: (paths: string[]) => ipcRenderer.invoke('media:scan', paths),
+  scanMedia: (paths: string[], projectId: number) => ipcRenderer.invoke('media:scan', paths, projectId),
 
   // Metadata Extraction (ffprobe bridge)
   getMetadata: (filePath: string) => ipcRenderer.invoke('get-metadata', filePath),
@@ -44,6 +44,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     updateStoryNodePosition: (nodeId: string, x: number, y: number) => ipcRenderer.invoke('db:updateStoryNodePosition', nodeId, x, y),
     deleteStoryNode: (nodeId: string) => ipcRenderer.invoke('db:deleteStoryNode', nodeId),
     clearStoryNodes: (projectId: number) => ipcRenderer.invoke('db:clearStoryNodes', projectId),
+
+    // Story Edges
+    saveStoryEdge: (edge: any) => ipcRenderer.invoke('db:saveStoryEdge', edge),
+    getStoryEdges: (projectId: number) => ipcRenderer.invoke('db:getStoryEdges', projectId),
+    deleteStoryEdge: (edgeId: string) => ipcRenderer.invoke('db:deleteStoryEdge', edgeId),
   },
 
   // Platform Info

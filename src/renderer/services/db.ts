@@ -5,7 +5,7 @@ declare global {
   interface Window {
     electronAPI: {
       selectFiles: () => Promise<string[] | null>;
-      scanMedia: (paths: string[]) => Promise<any[]>;
+      scanMedia: (paths: string[], projectId: number) => Promise<any[]>;
       getMetadata: (filePath: string) => Promise<any>;
       matchTranscript: (assetId: number) => Promise<boolean>;
       db: {
@@ -22,6 +22,11 @@ declare global {
         deleteSegmentsByAsset: (assetId: number) => Promise<boolean>;
         renameSpeaker: (assetId: number, oldName: string, newName: string) => Promise<boolean>;
         clear: () => Promise<boolean>;
+        
+        // Story Edges
+        saveStoryEdge: (edge: any) => Promise<boolean>;
+        getStoryEdges: (projectId: number) => Promise<any[]>;
+        deleteStoryEdge: (edgeId: string) => Promise<boolean>;
       };
     };
   }
@@ -38,7 +43,13 @@ class StoryGraphDB {
     return projects.map((p: any) => ({
       project_id: p.project_id,
       name: p.name,
-      description: p.description
+      description: p.description,
+      fps: p.fps,
+      resolution: p.resolution,
+      client: p.client,
+      status: p.status,
+      created_at: p.created_at,
+      last_edited: p.last_edited
     }));
   }
 
@@ -93,7 +104,7 @@ class StoryGraphDB {
     const filePaths = await window.electronAPI.selectFiles();
     if (!filePaths || filePaths.length === 0) return [];
 
-    const scannedFiles = await window.electronAPI.scanMedia(filePaths);
+    const scannedFiles = await window.electronAPI.scanMedia(filePaths, projectId);
 
     // The data from scanMedia is already in the shape the DB expects.
     await window.electronAPI.db.insertAssets(scannedFiles);

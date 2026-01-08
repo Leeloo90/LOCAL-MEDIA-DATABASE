@@ -7,9 +7,10 @@ interface InspectorPanelProps {
   asset: MediaAsset | null;
   segments: TranscriptSegment[];
   onSegmentsUpdate: () => void;
+  onSegmentHighlight: (segment: TranscriptSegment) => void;
 }
 
-export const InspectorPanel: React.FC<InspectorPanelProps> = ({ asset, segments, onSegmentsUpdate }) => {
+export const InspectorPanel: React.FC<InspectorPanelProps> = ({ asset, segments, onSegmentsUpdate, onSegmentHighlight }) => {
   const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
 
   // Extract unique speaker names from segments
@@ -75,7 +76,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({ asset, segments,
             </div>
             <div>
               <p className="text-[9px] text-gray-500 font-medium">RESOLUTION</p>
-              <p className="text-[13px] font-mono text-gray-200 mt-0.5">{asset.metadata.resolution}</p>
+              <p className="text-[13px] font-mono text-gray-200 mt-0.5">{asset.resolution}</p>
             </div>
             <div>
               <p className="text-[9px] text-gray-500 font-medium">DURATION (F)</p>
@@ -123,19 +124,29 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({ asset, segments,
               {segments.map((segment) => (
                 <div
                   key={segment.segment_id}
-                  draggable
-                  onDragStart={(e) => onSegmentDragStart(e, segment)}
-                  className="group cursor-move"
+                  className="group"
                 >
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[11px] font-bold text-indigo-400">
                       {segment.speaker_label}
                     </span>
-                    <span className="text-[10px] font-mono text-gray-500 group-hover:text-gray-300">
-                      {segment.time_in} - {segment.time_out}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <button 
+                        onClick={() => onSegmentHighlight(segment)}
+                        className="opacity-0 group-hover:opacity-100 px-2 py-0.5 text-[9px] font-bold text-gray-300 bg-gray-700 hover:bg-indigo-600 rounded transition-all"
+                      >
+                        Highlight
+                      </button>
+                      <span className="text-[10px] font-mono text-gray-500 group-hover:text-gray-300">
+                        {segment.time_in} - {segment.time_out}
+                      </span>
+                    </div>
                   </div>
-                  <div className="p-3 bg-[#1a1a1a] rounded-md border border-[#2a2a2a] group-hover:border-[#3a3a3a] transition-colors shadow-sm">
+                  <div 
+                    draggable
+                    onDragStart={(e) => onSegmentDragStart(e, segment)}
+                    className="p-3 bg-[#1a1a1a] rounded-md border border-[#2a2a2a] group-hover:border-[#3a3a3a] transition-colors shadow-sm cursor-move"
+                  >
                     <p className="text-xs text-gray-300 leading-relaxed">
                       {segment.content}
                     </p>
