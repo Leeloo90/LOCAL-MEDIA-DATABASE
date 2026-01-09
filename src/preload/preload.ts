@@ -3,13 +3,20 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  // Filesystem & Dialogs
-  selectFiles: () => ipcRenderer.invoke('dialog:openFiles'),
-  scanMedia: (paths: string[], projectId: number) => ipcRenderer.invoke('media:scan', paths, projectId),
+  // Dialogs
+  dialog: {
+    openFiles: () => ipcRenderer.invoke('dialog:openFiles'),
+  },
 
-  // Metadata Extraction (ffprobe bridge)
-  getMetadata: (filePath: string) => ipcRenderer.invoke('get-metadata', filePath),
-  matchTranscript: (assetId: number) => ipcRenderer.invoke('transcript:match-manual', assetId),
+  // Media Scanning
+  media: {
+    scan: (paths: string[], projectId: number) => ipcRenderer.invoke('media:scan', paths, projectId),
+  },
+
+  // Transcript Matching
+  transcript: {
+    matchManual: (assetId: number) => ipcRenderer.invoke('transcript:match-manual', assetId),
+  },
 
   // Database Operations (SQLite Bridge)
   db: {
@@ -38,17 +45,44 @@ contextBridge.exposeInMainWorld('electronAPI', {
     deleteSegmentsByAsset: (assetId: number) => ipcRenderer.invoke('db:deleteSegmentsByAsset', assetId),
     renameSpeaker: (assetId: number, oldName: string, newName: string) => ipcRenderer.invoke('db:renameSpeaker', assetId, oldName, newName),
 
-    // Story Nodes (Canvas State)
-    getStoryNodes: (projectId: number) => ipcRenderer.invoke('db:getStoryNodes', projectId),
+    // Canvas Management
+    getCanvases: (projectId: number) => ipcRenderer.invoke('db:getCanvases', projectId),
+    createCanvas: (projectId: number, name: string, description?: string) => ipcRenderer.invoke('db:createCanvas', projectId, name, description),
+    updateCanvas: (canvasId: number, name: string, description?: string) => ipcRenderer.invoke('db:updateCanvas', canvasId, name, description),
+    deleteCanvas: (canvasId: number) => ipcRenderer.invoke('db:deleteCanvas', canvasId),
+
+    // Story Nodes (Canvas State - use canvasId)
+    getStoryNodes: (canvasId: number) => ipcRenderer.invoke('db:getStoryNodes', canvasId),
     saveStoryNode: (node: any) => ipcRenderer.invoke('db:saveStoryNode', node),
     updateStoryNodePosition: (nodeId: string, x: number, y: number) => ipcRenderer.invoke('db:updateStoryNodePosition', nodeId, x, y),
     deleteStoryNode: (nodeId: string) => ipcRenderer.invoke('db:deleteStoryNode', nodeId),
-    clearStoryNodes: (projectId: number) => ipcRenderer.invoke('db:clearStoryNodes', projectId),
 
-    // Story Edges
+    // Story Edges (use canvasId)
+    getStoryEdges: (canvasId: number) => ipcRenderer.invoke('db:getStoryEdges', canvasId),
     saveStoryEdge: (edge: any) => ipcRenderer.invoke('db:saveStoryEdge', edge),
-    getStoryEdges: (projectId: number) => ipcRenderer.invoke('db:getStoryEdges', projectId),
     deleteStoryEdge: (edgeId: string) => ipcRenderer.invoke('db:deleteStoryEdge', edgeId),
+
+    // Node Enable/Disable
+    updateNodeEnabled: (nodeId: string, isEnabled: boolean) => ipcRenderer.invoke('db:updateNodeEnabled', nodeId, isEnabled),
+
+    // Act Operations
+    getActs: (canvasId: number) => ipcRenderer.invoke('db:getActs', canvasId),
+    createAct: (act: any) => ipcRenderer.invoke('db:createAct', act),
+    updateActPosition: (actId: number, x: number, y: number) => ipcRenderer.invoke('db:updateActPosition', actId, x, y),
+    deleteAct: (actId: number) => ipcRenderer.invoke('db:deleteAct', actId),
+
+    // Scene Operations
+    getScenes: (actId: number) => ipcRenderer.invoke('db:getScenes', actId),
+    getScenesByCanvas: (canvasId: number) => ipcRenderer.invoke('db:getScenesByCanvas', canvasId),
+    createScene: (scene: any) => ipcRenderer.invoke('db:createScene', scene),
+    updateScenePosition: (sceneId: number, x: number, y: number) => ipcRenderer.invoke('db:updateScenePosition', sceneId, x, y),
+    deleteScene: (sceneId: number) => ipcRenderer.invoke('db:deleteScene', sceneId),
+
+    // Bucket Operations
+    getBucketItems: (projectId: number, canvasId?: number) => ipcRenderer.invoke('db:getBucketItems', projectId, canvasId),
+    addBucketItem: (item: any) => ipcRenderer.invoke('db:addBucketItem', item),
+    updateBucketItemNotes: (bucketItemId: number, notes: string) => ipcRenderer.invoke('db:updateBucketItemNotes', bucketItemId, notes),
+    deleteBucketItem: (bucketItemId: number) => ipcRenderer.invoke('db:deleteBucketItem', bucketItemId),
   },
 
   // Platform Info

@@ -10,23 +10,60 @@ declare global {
       matchTranscript: (assetId: number) => Promise<boolean>;
       db: {
         getProjects: () => Promise<any[]>;
+        createProject: (name: string, options?: any) => Promise<number>;
+        deleteProject: (projectId: number) => Promise<boolean>;
+        touchProject: (projectId: number) => Promise<boolean>;
+
         getAssets: (projectId: number) => Promise<any[]>;
         insertAsset: (asset: any) => Promise<number>;
         insertAssets: (assets: any[]) => Promise<boolean>;
         updateAssetType: (assetId: number, type: string) => Promise<boolean>;
         deleteAsset: (assetId: number) => Promise<boolean>;
         findAssetByFileName: (fileName: string) => Promise<any>;
+
         getSegments: (assetId: number) => Promise<any[]>;
         insertSegment: (segment: any) => Promise<number>;
         insertSegments: (segments: any[]) => Promise<boolean>;
         deleteSegmentsByAsset: (assetId: number) => Promise<boolean>;
         renameSpeaker: (assetId: number, oldName: string, newName: string) => Promise<boolean>;
         clear: () => Promise<boolean>;
-        
+
+        // Canvas Management
+        getCanvases: (projectId: number) => Promise<any[]>;
+        createCanvas: (projectId: number, name: string, description?: string) => Promise<number>;
+        updateCanvas: (canvasId: number, name: string, description?: string) => Promise<boolean>;
+        deleteCanvas: (canvasId: number) => Promise<boolean>;
+
+        // Story Nodes
+        getStoryNodes: (canvasId: number) => Promise<any[]>;
+        saveStoryNode: (node: any) => Promise<boolean>;
+        updateStoryNodePosition: (nodeId: string, x: number, y: number) => Promise<boolean>;
+        deleteStoryNode: (nodeId: string) => Promise<boolean>;
+        updateNodeEnabled: (nodeId: string, isEnabled: boolean) => Promise<boolean>;
+
         // Story Edges
+        getStoryEdges: (canvasId: number) => Promise<any[]>;
         saveStoryEdge: (edge: any) => Promise<boolean>;
-        getStoryEdges: (projectId: number) => Promise<any[]>;
         deleteStoryEdge: (edgeId: string) => Promise<boolean>;
+
+        // Acts
+        getActs: (canvasId: number) => Promise<any[]>;
+        createAct: (act: any) => Promise<number>;
+        updateActPosition: (actId: number, x: number, y: number) => Promise<boolean>;
+        deleteAct: (actId: number) => Promise<boolean>;
+
+        // Scenes
+        getScenes: (actId: number) => Promise<any[]>;
+        getScenesByCanvas: (canvasId: number) => Promise<any[]>;
+        createScene: (scene: any) => Promise<number>;
+        updateScenePosition: (sceneId: number, x: number, y: number) => Promise<boolean>;
+        deleteScene: (sceneId: number) => Promise<boolean>;
+
+        // Bucket Operations
+        getBucketItems: (projectId: number, canvasId?: number) => Promise<any[]>;
+        addBucketItem: (item: any) => Promise<number>;
+        updateBucketItemNotes: (bucketItemId: number, notes: string) => Promise<boolean>;
+        deleteBucketItem: (bucketItemId: number) => Promise<boolean>;
       };
     };
   }

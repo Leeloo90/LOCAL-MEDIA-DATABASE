@@ -1,28 +1,34 @@
 import React from 'react';
-import { Handle, Position, NodeProps } from '@xyflow/react';
+import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { MediaType } from '../../types';
 
-interface MediaNodeData {
+// Defining the data structure that StoryCanvas.tsx must "hydrate" into this node
+export type MediaNodeData = {
   label: string;
   status: MediaType;
   duration?: string;
   hasTranscript?: boolean;
-}
+};
 
-export const MediaNode: React.FC<NodeProps<MediaNodeData>> = ({ data, selected }) => {
+// We wrap the custom data type in the XYFlow Node type for full TypeScript support
+export type MediaNodeProps = Node<MediaNodeData, 'mediaNode'>;
+
+export const MediaNode: React.FC<NodeProps<MediaNodeProps>> = ({ data, selected }) => {
   return (
     <div className={`px-4 py-3 shadow-xl rounded-md bg-[#1a1a1a] border-2 min-w-[200px] transition-all ${
       selected ? 'border-indigo-500 shadow-indigo-500/20' : 'border-[#333] hover:border-indigo-400'
     }`}>
-      {/* Target Handle (Input) */}
+      {/* Target Handle (Input Connection) */}
       <Handle
         type="target"
         position={Position.Left}
         className="w-2.5 h-2.5 bg-indigo-500 border-2 border-[#1a1a1a]"
+        style={{ left: '-6px' }}
       />
 
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between mb-1">
+          {/* Status Badge: Green for Dialogue (Interviews), Grey for Broll */}
           <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded ${
             data.status === MediaType.DIALOGUE
               ? 'bg-green-900/40 text-green-400 border border-green-800'
@@ -30,42 +36,48 @@ export const MediaNode: React.FC<NodeProps<MediaNodeData>> = ({ data, selected }
           }`}>
             {data.status}
           </span>
+
+          {/* Transcript Icon: Shows if the clip has a word-map linked */}
           {data.hasTranscript && (
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="text-indigo-400"
-            >
-              <path d="M17 6.1H3"/>
-              <path d="M21 12.1H3"/>
-              <path d="M15.1 18H3"/>
-            </svg>
+            <div className="flex items-center gap-1 text-indigo-400" title="Transcript Available">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M17 6.1H3"/>
+                <path d="M21 12.1H3"/>
+                <path d="M15.1 18H3"/>
+              </svg>
+            </div>
           )}
         </div>
 
+        {/* Filename Label */}
         <div className="text-[11px] font-bold text-gray-200 truncate" title={data.label}>
           {data.label}
         </div>
 
+        {/* Timecode Duration Display */}
         {data.duration && (
-          <div className="text-[9px] font-mono text-gray-500">
+          <div className="text-[9px] font-mono text-gray-500 tracking-tighter">
             {data.duration}
           </div>
         )}
       </div>
 
-      {/* Source Handle (Output) */}
+      {/* Source Handle (Output Connection) */}
       <Handle
         type="source"
         position={Position.Right}
         className="w-2.5 h-2.5 bg-indigo-500 border-2 border-[#1a1a1a]"
+        style={{ right: '-6px' }}
       />
     </div>
   );
